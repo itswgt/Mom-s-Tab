@@ -273,7 +273,7 @@
   }
 
   .balance-amount.owes {
-    color: var(--indigo);
+    color: var(--coral);
   }
 
   .balance-amount.settled {
@@ -322,6 +322,11 @@
 
   .settle-btn[hidden] {
     display: none;
+  }
+
+  .settle-btn:disabled {
+    opacity: .55;
+    cursor: not-allowed;
   }
 
   .summary-grid {
@@ -1422,23 +1427,35 @@
   };
 
 
-  window.prepareFullPayment = function() {
+  window.prepareFullPayment = async function() {
     if (currentBalance <= 0) return;
 
-    setType('payment');
+    const btn = document.getElementById('settleBtn');
+    const amountToPay = Number(currentBalance.toFixed(2));
 
-    const amountEl = document.getElementById('entryAmount');
-    const noteEl = document.getElementById('entryNote');
+    btn.disabled = true;
+    btn.textContent = 'Recording…';
 
-    amountEl.value = currentBalance.toFixed(2);
+    try {
+      await fbPush('/entries', {
+        id: Date.now(),
+        type: 'payment',
+        title: 'Payment',
+        amount: amountToPay,
+        date: todayDate(),
+        note: 'Paid full balance'
+      });
 
-    if (!noteEl.value.trim()) {
-      noteEl.value = 'Paid full balance';
+      lastHash = '';
+      await fetchEntries(true);
+      toast('Full payment recorded.');
+    } catch (err) {
+      console.error(err);
+      toast('Could not record the payment.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Record full payment';
     }
-
-    amountEl.focus();
-    amountEl.select();
-    toast('Full balance filled in — press Enter or Done to save.');
   };
 
   window.setFilter = function(f) {

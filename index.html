@@ -6,7 +6,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Mom's Tab">
-<meta name="theme-color" content="#f5f7fb">
+<meta name="theme-color" content="#f5f7fb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1720" media="(prefers-color-scheme: dark)">
 <title>Mom's Tab</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -440,6 +441,11 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
+    align-items: end;
+  }
+
+  .field-grid .field {
+    min-width: 0;
   }
 
   label {
@@ -460,6 +466,16 @@
     padding: 13px 14px;
     font-size: 16px;
     transition: border-color .18s, box-shadow .18s, background .18s;
+  }
+
+  input {
+    height: 50px;
+    min-height: 50px;
+  }
+
+  input[type="date"] {
+    display: block;
+    line-height: 22px;
   }
 
   input::placeholder, textarea::placeholder {
@@ -525,6 +541,11 @@
 
   .utility-btn:active {
     opacity: .74;
+  }
+
+  .bottom-utilities {
+    margin-top: 18px;
+    padding-bottom: 4px;
   }
 
   .history-head {
@@ -897,7 +918,10 @@
   }
 
   @media (max-width: 380px) {
-    .field-grid { grid-template-columns: 1fr; }
+    .field-grid {
+      grid-template-columns: 1fr;
+      align-items: stretch;
+    }
     .status-text { display: none; }
     .status-pill { padding: 9px; }
   }
@@ -967,7 +991,7 @@
         <button class="type-btn" id="typePayment" onclick="setType('payment')">Payment</button>
       </div>
 
-      <div class="form-card">
+      <form class="form-card" id="entryForm" onsubmit="addEntry(event)">
         <div class="field" id="titleField">
           <label for="entryTitle">What did you buy?</label>
           <input type="text" id="entryTitle" placeholder="Groceries, medicine, household item..." maxlength="60" autocomplete="off">
@@ -977,7 +1001,7 @@
           <div class="field">
             <label for="entryAmount">Amount</label>
             <input type="number" id="entryAmount" placeholder="$0.00" step="0.01" min="0" inputmode="decimal"
-              enterkeyhint="done" onkeydown="handleAmountKey(event)">
+              enterkeyhint="go" autocomplete="off">
           </div>
           <div class="field">
             <label for="entryDate">Date</label>
@@ -990,13 +1014,8 @@
           <textarea id="entryNote" placeholder="Add any details you want to remember..."></textarea>
         </div>
 
-        <button class="primary-btn purchase" id="addBtn" onclick="addEntry()">Add purchase</button>
-      </div>
-
-      <div class="utility-row">
-        <button class="utility-btn" onclick="exportBackup()">↓ Export backup</button>
-        <button class="utility-btn" onclick="openImport()">↑ Import backup</button>
-      </div>
+        <button class="primary-btn purchase" id="addBtn" type="submit">Add purchase</button>
+      </form>
     </section>
 
     <section class="section">
@@ -1015,6 +1034,11 @@
       </div>
 
       <div id="entryList"></div>
+
+      <div class="utility-row bottom-utilities">
+        <button class="utility-btn" type="button" onclick="exportBackup()">↓ Export backup</button>
+        <button class="utility-btn" type="button" onclick="openImport()">↑ Import backup</button>
+      </div>
     </section>
   </main>
 </div>
@@ -1321,12 +1345,6 @@
     btn.className = 'primary-btn ' + t;
   };
 
-  window.handleAmountKey = function(event) {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      addEntry();
-    }
-  };
 
   window.prepareFullPayment = function() {
     if (currentBalance <= 0) return;
@@ -1358,7 +1376,9 @@
     fetchEntries(true);
   };
 
-  window.addEntry = async function() {
+  window.addEntry = async function(event) {
+    if (event) event.preventDefault();
+
     const btn = document.getElementById('addBtn');
     const titleEl = document.getElementById('entryTitle');
     const amtEl = document.getElementById('entryAmount');
@@ -1703,6 +1723,13 @@
   };
 
   document.getElementById('entryDate').value = todayDate();
+
+  document.getElementById('entryAmount').addEventListener('keydown', function(event) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      document.getElementById('entryForm').requestSubmit();
+    }
+  });
 
   document.getElementById('editOverlay').addEventListener('click', function(event) {
     if (event.target === this) closeEdit();

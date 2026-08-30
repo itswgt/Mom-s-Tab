@@ -439,13 +439,23 @@
 
   .field-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 10px;
     align-items: end;
+    width: 100%;
   }
 
   .field-grid .field {
     min-width: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .field-grid .field input {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
   }
 
   label {
@@ -469,13 +479,45 @@
   }
 
   input {
-    height: 50px;
-    min-height: 50px;
+    height: 48px;
+    min-height: 48px;
+    max-height: 48px;
+    line-height: 20px;
+  }
+
+  input[type="number"],
+  input[type="date"] {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    height: 48px;
+    min-height: 48px;
+    max-height: 48px;
+    padding-top: 0;
+    padding-bottom: 0;
+    line-height: 48px;
+    box-sizing: border-box;
   }
 
   input[type="date"] {
     display: block;
-    line-height: 22px;
+    overflow: hidden;
+  }
+
+  input[type="date"]::-webkit-date-and-time-value {
+    min-width: 0;
+    text-align: left;
+  }
+
+  input[type="date"]::-webkit-datetime-edit {
+    min-width: 0;
+    padding: 0;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    margin: 0;
+    padding: 4px;
+    flex-shrink: 0;
   }
 
   input::placeholder, textarea::placeholder {
@@ -918,12 +960,47 @@
   }
 
   @media (max-width: 380px) {
+    .status-text { display: none; }
+    .status-pill { padding: 9px; }
+
+    main {
+      padding-left: 14px;
+      padding-right: 14px;
+    }
+
+    .form-card {
+      padding: 14px;
+    }
+
+    .field-grid {
+      gap: 8px;
+    }
+
+    .field-grid label {
+      font-size: 10px;
+    }
+
+    input[type="number"],
+    input[type="date"] {
+      font-size: 15px;
+      padding-left: 11px;
+      padding-right: 11px;
+    }
+  }
+
+  @media (max-width: 310px) {
     .field-grid {
       grid-template-columns: 1fr;
       align-items: stretch;
     }
-    .status-text { display: none; }
-    .status-pill { padding: 9px; }
+  }
+
+
+  @supports (-webkit-touch-callout: none) {
+    input[type="date"] {
+      -webkit-appearance: none;
+      appearance: none;
+    }
   }
 
 </style>

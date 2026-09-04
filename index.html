@@ -1008,10 +1008,80 @@
     }
   }
 
+
+  /* Secure sign-in gate */
+  .auth-gate {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: grid;
+    place-items: center;
+    padding: 22px;
+    background: var(--body-bg);
+  }
+
+  .auth-gate[hidden] { display: none; }
+
+  .auth-card {
+    width: min(100%, 390px);
+    padding: 24px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--card-bg);
+    box-shadow: var(--hero-shadow);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+
+  .auth-card h2 {
+    margin: 0 0 6px;
+    font-family: Manrope, Inter, sans-serif;
+    font-size: 24px;
+  }
+
+  .auth-card > p {
+    margin: 0 0 18px;
+    color: var(--muted);
+    line-height: 1.45;
+    font-size: 13px;
+  }
+
+  .auth-card .field { margin-bottom: 12px; }
+  .auth-card .primary-btn { width: 100%; margin-top: 4px; }
+
+  .auth-error {
+    min-height: 18px;
+    margin-top: 10px;
+    color: var(--danger);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
 </style>
 </head>
 
 <body>
+
+<div class="auth-gate" id="authGate">
+  <form class="auth-card" id="authForm">
+    <h2>Mom's Tab</h2>
+    <p>Sign in once on this device. Your session stays saved unless you sign out or clear browser data.</p>
+
+    <div class="field">
+      <label for="authEmail">Email</label>
+      <input type="email" id="authEmail" autocomplete="username" required>
+    </div>
+
+    <div class="field">
+      <label for="authPassword">Password</label>
+      <input type="password" id="authPassword" autocomplete="current-password" required>
+    </div>
+
+    <button class="primary-btn purchase" id="authBtn" type="submit">Sign in</button>
+    <div class="auth-error" id="authError" role="alert" aria-live="polite"></div>
+  </form>
+</div>
+
 <div class="app">
 
   <header class="topbar">
@@ -1203,9 +1273,38 @@
 
 <div class="toast" id="toast"></div>
 
-<script>
-  // Existing Firebase Realtime Database URL from your original app.
-  const DB = "https://mom-s-tab-default-rtdb.firebaseio.com";
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+  import {
+    getAuth,
+    setPersistence,
+    browserLocalPersistence,
+    onAuthStateChanged,
+    signInWithEmailAndPassword
+  } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
+  import {
+    getDatabase,
+    ref,
+    get,
+    push,
+    set,
+    update,
+    remove,
+    onValue
+  } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-database.js";
+
+  // Firebase web app configuration for Mom's Tab.
+  const firebaseConfig = {
+    apiKey: "AIzaSyBgkKadD0xwfv8c4EmfexczDYThLzA7NUQ",
+    authDomain: "mom-s-tab.firebaseapp.com",
+    databaseURL: "https://mom-s-tab-default-rtdb.firebaseio.com",
+    projectId: "mom-s-tab",
+    appId: "1:910957229880:web:9b347e91d3d0add766b3cd"
+  };
+
+  const firebaseApp = initializeApp(firebaseConfig);
+  const auth = getAuth(firebaseApp);
+  const database = getDatabase(firebaseApp);
 
   let entries = [];
   let currentType = 'purchase';
@@ -1246,84 +1345,127 @@
       .replace(/'/g, '&#039;');
   }
 
-  async function checkedJsonResponse(response) {
-    if (!response.ok) {
-      const message = await response.text().catch(() => '');
-      throw new Error(message || `Request failed: ${response.status}`);
-    }
-    return response.json();
-  }
+  const cleanPath = path => String(path || '').replace(/^\/+/, '');
 
   async function fbGet(path) {
-    const r = await fetch(DB + path + '.json');
-    return checkedJsonResponse(r);
+    const snapshot = await get(ref(database, cleanPath(path)));
+    return snapshot.val();
   }
 
   async function fbPush(path, data) {
-    const r = await fetch(DB + path + '.json', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    return checkedJsonResponse(r);
+    const result = await push(ref(database, cleanPath(path)), data);
+    return { name: result.key };
   }
 
   async function fbDelete(path) {
-    const r = await fetch(DB + path + '.json', { method: 'DELETE' });
-    if (!r.ok) throw new Error(`Delete failed: ${r.status}`);
+    await remove(ref(database, cleanPath(path)));
   }
 
   async function fbSet(path, data) {
-    const r = await fetch(DB + path + '.json', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    if (!r.ok) throw new Error(`Save failed: ${r.status}`);
+    await set(ref(database, cleanPath(path)), data);
   }
 
-
   async function fbUpdate(path, data) {
-    const r = await fetch(DB + path + '.json', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    if (!r.ok) throw new Error(`Update failed: ${r.status}`);
+    await update(ref(database, cleanPath(path)), data);
+  }
+
+  function applyEntriesData(data, force = false) {
+    const hash = JSON.stringify(data);
+    document.getElementById('syncDot').classList.add('connected');
+
+    if (hash === lastHash && !force) return;
+    lastHash = hash;
+
+    const prevKeys = new Set(entries.map(e => e.firebaseKey));
+    entries = [];
+
+    if (data && typeof data === 'object') {
+      Object.entries(data).forEach(([key, val]) => {
+        if (val && typeof val === 'object') {
+          entries.push({ firebaseKey: key, ...val });
+        }
+      });
+
+      entries.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    }
+
+    diffRender(prevKeys);
+    updateBalance();
   }
 
   async function fetchEntries(force = false) {
+    if (!auth.currentUser) return;
     try {
       const data = await fbGet('/entries');
-      const hash = JSON.stringify(data);
-      document.getElementById('syncDot').classList.add('connected');
-
-      if (hash === lastHash && !force) return;
-      lastHash = hash;
-
-      const prevKeys = new Set(entries.map(e => e.firebaseKey));
-      entries = [];
-
-      if (data && typeof data === 'object') {
-        Object.entries(data).forEach(([key, val]) => {
-          if (val && typeof val === 'object') {
-            entries.push({ firebaseKey: key, ...val });
-          }
-        });
-
-        entries.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
-      }
-
-      diffRender(prevKeys);
-      updateBalance();
+      applyEntriesData(data, force);
     } catch (err) {
       console.error(err);
       document.getElementById('syncDot').classList.remove('connected');
     }
   }
 
-  fetchEntries(true);
-  setInterval(fetchEntries, 5000);
+  let stopRealtime = null;
+
+  function startRealtimeSync() {
+    if (stopRealtime) stopRealtime();
+
+    stopRealtime = onValue(
+      ref(database, 'entries'),
+      snapshot => applyEntriesData(snapshot.val()),
+      err => {
+        console.error(err);
+        document.getElementById('syncDot').classList.remove('connected');
+        toast('Realtime sync lost. Check your connection.');
+      }
+    );
+  }
+
+  const authGate = document.getElementById('authGate');
+  const authForm = document.getElementById('authForm');
+  const authBtn = document.getElementById('authBtn');
+  const authError = document.getElementById('authError');
+
+  authForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    authError.textContent = '';
+    authBtn.disabled = true;
+    authBtn.textContent = 'Signing in…';
+
+    try {
+      await signInWithEmailAndPassword(
+        auth,
+        document.getElementById('authEmail').value.trim(),
+        document.getElementById('authPassword').value
+      );
+    } catch (err) {
+      console.error(err);
+      authError.textContent = 'Could not sign in. Check the email and password.';
+    } finally {
+      authBtn.disabled = false;
+      authBtn.textContent = 'Sign in';
+    }
+  });
+
+  try {
+    await setPersistence(auth, browserLocalPersistence);
+  } catch (err) {
+    console.error('Could not enable persistent sign-in:', err);
+  }
+
+  onAuthStateChanged(auth, user => {
+    if (user) {
+      authGate.hidden = true;
+      lastHash = '';
+      startRealtimeSync();
+    } else {
+      authGate.hidden = false;
+      document.getElementById('syncDot').classList.remove('connected');
+      if (stopRealtime) {
+        stopRealtime();
+        stopRealtime = null;
+      }
+    }
+  });
 
   function diffRender(prevKeys) {
     const list = document.getElementById('entryList');
